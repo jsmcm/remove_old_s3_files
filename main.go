@@ -32,6 +32,59 @@ func getAwsConfig() aws.Config {
 	return config
 }
 
+func deleteOrphanedImages(s3Client *s3.Client, bucket string) error {
+
+	var continuationToken *string
+
+	for {
+		// List objects in the bucket with the given prefix
+		listObjectsInput := &s3.ListObjectsV2Input{
+			Bucket:            aws.String(bucket),
+			Prefix:            aws.String("entry/images/"),
+			ContinuationToken: continuationToken,
+		}
+
+		listObjectsOutput, err := s3Client.ListObjectsV2(context.TODO(), listObjectsInput)
+		if err != nil {
+			return fmt.Errorf("failed to list objects: %w", err)
+		}
+
+		if len(listObjectsOutput.Contents) == 0 {
+			// No objects found, nothing to delete
+			return nil
+		}
+
+		// Get the current time
+		currentTime := time.Now()
+
+		// Iterate over the objects in the bucket
+		for _, object := range listObjectsOutput.Contents {
+			// Calculate the object's age
+			objectAge := currentTime.Sub(*object.LastModified)
+
+			// If the object is older than 24 hours, delete it
+			if objectAge > time.Hour {
+				_, err := s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+					Bucket: aws.String(bucket),
+					Key:    object.Key,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to delete object %s: %w", *object.Key, err)
+				}
+				fmt.Printf("Deleted object: %s\n", *object.Key)
+			}
+		}
+
+		if listObjectsOutput.IsTruncated != nil && *listObjectsOutput.IsTruncated {
+			continuationToken = listObjectsOutput.NextContinuationToken
+		} else {
+			break
+		}
+	}
+	return nil
+
+}
+
 func deleteFolder(s3Client *s3.Client, bucket string, prefix string) error {
 
 	var continuationToken *string
@@ -117,6 +170,8 @@ func main() {
 
 			deleteFolder(s3Client, connection.Bucket, entryBucket)
 		}
+
+		deleteOrphanedImages(s3Client, connection.Bucket)
 
 	}
 
