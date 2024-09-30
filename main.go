@@ -71,7 +71,7 @@ func deleteOrphanedImages(s3Client *s3.Client, bucket string) error {
 				if err != nil {
 					return fmt.Errorf("failed to delete object %s: %w", *object.Key, err)
 				}
-				fmt.Printf("Deleted object: %s\n", *object.Key)
+				// fmt.Printf("Deleted object: %s\n", *object.Key)
 			}
 		}
 
@@ -166,7 +166,7 @@ func main() {
 
 			month = month.AddDate(0, -1, 0)
 			entryBucket := fmt.Sprintf("entry/%s/", month.Format("2006-01"))
-			fmt.Println("entryBucket: ", entryBucket)
+			// fmt.Println("entryBucket: ", entryBucket)
 
 			deleteFolder(s3Client, connection.Bucket, entryBucket)
 		}
