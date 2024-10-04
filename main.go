@@ -34,8 +34,9 @@ func getAwsConfig() aws.Config {
 
 func deleteOrphanedImages(s3Client *s3.Client, bucket string) error {
 
+	fmt.Println("deleteOrphanedImages")
 	var continuationToken *string
-
+	// x := 0
 	for {
 		// List objects in the bucket with the given prefix
 		listObjectsInput := &s3.ListObjectsV2Input{
@@ -57,22 +58,31 @@ func deleteOrphanedImages(s3Client *s3.Client, bucket string) error {
 		// Get the current time
 		currentTime := time.Now()
 
+		var objectsToDelete []types.ObjectIdentifier
 		// Iterate over the objects in the bucket
 		for _, object := range listObjectsOutput.Contents {
 			// Calculate the object's age
 			objectAge := currentTime.Sub(*object.LastModified)
 
 			// If the object is older than 24 hours, delete it
-			if objectAge > time.Hour {
-				_, err := s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
-					Bucket: aws.String(bucket),
-					Key:    object.Key,
-				})
-				if err != nil {
-					return fmt.Errorf("failed to delete object %s: %w", *object.Key, err)
-				}
-				// fmt.Printf("Deleted object: %s\n", *object.Key)
+			if objectAge > time.Hour*24 {
+				objectsToDelete = append(objectsToDelete, types.ObjectIdentifier{Key: object.Key})
 			}
+		}
+
+		// Delete objects
+		deleteObjectsInput := &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucket),
+			Delete: &types.Delete{
+				Objects: objectsToDelete,
+				Quiet:   aws.Bool(true),
+			},
+		}
+
+		fmt.Println("len(objectsToDelete): ", len(objectsToDelete))
+		_, err = s3Client.DeleteObjects(context.TODO(), deleteObjectsInput)
+		if err != nil {
+			return fmt.Errorf("failed to delete objects: %w", err)
 		}
 
 		if listObjectsOutput.IsTruncated != nil && *listObjectsOutput.IsTruncated {
@@ -89,6 +99,7 @@ func deleteFolder(s3Client *s3.Client, bucket string, prefix string) error {
 
 	var continuationToken *string
 
+	fmt.Println("deleteFolder: ", prefix)
 	for {
 		// List objects in the bucket with the given prefix
 		listObjectsInput := &s3.ListObjectsV2Input{
@@ -99,6 +110,7 @@ func deleteFolder(s3Client *s3.Client, bucket string, prefix string) error {
 
 		listObjectsOutput, err := s3Client.ListObjectsV2(context.TODO(), listObjectsInput)
 		if err != nil {
+			fmt.Println(err)
 			return fmt.Errorf("failed to list objects: %w", err)
 		}
 
@@ -157,7 +169,9 @@ func main() {
 		}
 
 		awsConfig := getAwsConfig()
-		s3Client := s3.NewFromConfig(awsConfig)
+		s3Client := s3.NewFromConfig(awsConfig, func(o *s3.Options) {
+			o.UsePathStyle = true // Force path-style URLs
+		})
 
 		// get folders for 12 months
 		month := time.Now()
