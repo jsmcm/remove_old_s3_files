@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -152,7 +153,16 @@ func main() {
 
 	var connections []remoteConnection
 
-	fileBytes, err := os.ReadFile("./connections.json")
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Fatal("Error reading connections.json: ", err)
+	}
+
+	exeDirectory := filepath.Dir(exePath)
+
+	filePath := filepath.Join(exeDirectory, "connections.json")
+
+	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		log.Fatal("Error reading connections.json: ", err)
 	}
